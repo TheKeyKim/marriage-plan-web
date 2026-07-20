@@ -11,14 +11,15 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
-  // ---- 상태 로드 (저장 구조: {categories, rows}; 과거 배열 형태도 허용) ----
+  // ---- 상태 로드 (저장 구조: {meta, categories, rows}; 과거 배열 형태도 허용) ----
   const _saved = loadLocal();
-  let cats, rows;
+  let cats, rows, meta;
   if (Array.isArray(_saved)) { cats = CATEGORIES.map((c) => ({ ...c })); rows = _saved; }
   else if (_saved && Array.isArray(_saved.rows)) {
     cats = Array.isArray(_saved.categories) ? _saved.categories : CATEGORIES.map((c) => ({ ...c }));
     rows = _saved.rows;
   } else { cats = CATEGORIES.map((c) => ({ ...c })); rows = DEFAULT_ROWS.map((r) => ({ ...r })); }
+  meta = { ...META, ...((_saved && _saved.meta) || {}) };
 
   let sort = { key: null, dir: 1 };
   let view = "overview";          // 'overview' | 'table'
@@ -28,7 +29,10 @@
   // ---- 되돌리기 히스토리 (분류+행 함께 스냅샷) ----
   const history = [];
   let pending = null;
-  const snapshot = () => JSON.stringify({ categories: cats, rows });
+  const snapshot = () => JSON.stringify({ meta, categories: cats, rows });
+  // ---- 원격 동기화 상태 ----
+  let saveTimer = null, remoteBusy = false, appliedSha = null;
+  const currentState = () => ({ meta, categories: cats, rows });
   function pushHistory(snap) {
     history.push(snap != null ? snap : snapshot());
     if (history.length > 50) history.shift();
@@ -38,6 +42,7 @@
   function undo() {
     if (!history.length) return;
     const s = JSON.parse(history.pop());
+    meta = s.meta || meta;
     cats = s.categories || cats;
     rows = s.rows || [];
     pending = null;
@@ -59,11 +64,12 @@
     try { const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
     catch { return null; }
   }
-  const stateJson = () => JSON.stringify({ categories: cats, rows });
+  const stateJson = () => JSON.stringify({ meta, categories: cats, rows });
   async function save() {
     localStorage.setItem(KEY, stateJson());
     renderSummary();
     await writeFile();
+    scheduleRemoteSave();
   }
 
   /* ---------------------- 파일 영속성 (JSON) ---------------------- */
@@ -88,7 +94,7 @@
   }
   async function writeFile() {
     if (!fileHandle) return;
-    try { const w = await fileHandle.createWritable(); await w.write(JSON.stringify({ categories: cats, rows }, null, 2)); await w.close(); }
+    try { const w = await fileHandle.createWritable(); await w.write(JSON.stringify({ meta, categories: cats, rows }, null, 2)); await w.close(); }
     catch (e) { console.warn("파일 저장 실패", e); }
   }
   function markFile() {
@@ -97,7 +103,7 @@
     el.classList.toggle("on", !!fileHandle);
   }
   function downloadJson() {
-    const blob = new Blob([JSON.stringify({ categories: cats, rows }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ meta, categories: cats, rows }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "marriage-plan.json"; a.click();
     URL.revokeObjectURL(a.href);
@@ -107,6 +113,7 @@
     else if (data && Array.isArray(data.rows)) {
       rows = data.rows;
       if (Array.isArray(data.categories)) cats = data.categories;
+      if (data.meta) meta = { ...META, ...data.meta };
     } else throw new Error("형식 오류");
     render();
   }
@@ -133,14 +140,99 @@
     $("#progressFill").style.width = pct + "%";
     $("#progressText").textContent = `${allDone}/${rows.length} · ${pct}%`;
 
-    $("#coupleLine").textContent = `${META.groom} · ${META.bride}  |  ${META.venue}`;
+    $("#coupleLine").textContent = `${meta.groom} · ${meta.bride}  |  ${meta.venue}`;
     renderCountdown();
   }
   function renderCountdown() {
-    const t = new Date(META.date), now = new Date();
+    const t = new Date(meta.date), now = new Date();
     const d = Math.ceil((t - now) / 86400000);
-    $("#dday").textContent = d > 0 ? `D-${d}` : d === 0 ? "D-DAY" : `D+${-d}`;
-    $("#ddate").textContent = t.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+    $("#dday").textContent = isNaN(t) ? "D-—" : d > 0 ? `D-${d}` : d === 0 ? "D-DAY" : `D+${-d}`;
+    $("#ddate").textContent = isNaN(t) ? "예식일 미설정" : t.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+  }
+
+  /* ---------------------- 원격 동기화 (GitHub) ---------------------- */
+  function setSyncState(kind, extra) {
+    const map = { idle: "", loading: "⟳ 불러오는 중…", pending: "… 저장 대기", saving: "⟳ 저장 중…", ok: "✓ 동기화됨", empty: "원격 비어있음", error: "⚠ 오류" };
+    let txt = map[kind] != null ? map[kind] : "";
+    if (kind === "ok") txt += " " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    if (kind === "error" && extra) txt += ": " + (extra.msg || extra.status || "");
+    const b = $("#syncBadge"); if (b) b.textContent = txt;
+    const s = $("#syncState"); if (s) s.textContent = GHSync.ready() ? (txt || "연결됨") : "미연결";
+  }
+  function scheduleRemoteSave() {
+    if (!GHSync.ready()) return;
+    setSyncState("pending");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveTimer = null; doRemoteSave(); }, 2500);
+  }
+  async function doRemoteSave() {
+    if (!GHSync.ready()) return;
+    clearTimeout(saveTimer); saveTimer = null;
+    remoteBusy = true; setSyncState("saving");
+    try {
+      await GHSync.save(currentState());
+      appliedSha = GHSync.lastSha; setSyncState("ok");
+    } catch (e) {
+      if (e && e.conflict) {
+        const pull = confirm("상대가 먼저 저장했어요.\n\n[확인] 원격 내용 불러오기 (내 변경은 ‘되돌리기’로 복구 가능)\n[취소] 내 내용으로 덮어쓰기");
+        if (pull) { remoteBusy = false; await remotePull(true); }
+        else { try { await GHSync.load(); await GHSync.save(currentState()); appliedSha = GHSync.lastSha; setSyncState("ok"); } catch (e2) { setSyncState("error", e2); } }
+      } else setSyncState("error", e);
+    } finally { remoteBusy = false; }
+  }
+  function applyRemote(state) {
+    if (!state) return;
+    clearTimeout(saveTimer); saveTimer = null;
+    if (state.meta) meta = { ...META, ...state.meta };
+    if (Array.isArray(state.categories)) cats = state.categories;
+    if (Array.isArray(state.rows)) rows = state.rows;
+    localStorage.setItem(KEY, stateJson());
+    if (catFilter !== "all" && !cats.some((c) => c.id === catFilter)) catFilter = "all";
+    render();
+  }
+  async function remotePull(force) {
+    if (!GHSync.ready()) return;
+    remoteBusy = true;
+    try {
+      const res = await GHSync.load();
+      if (!res) { setSyncState("empty"); if (force) { await doRemoteSave(); } }
+      else if (force || res.sha !== appliedSha) { applyRemote(res.state); appliedSha = res.sha; setSyncState("ok"); }
+    } catch (e) { setSyncState("error", e); }
+    finally { remoteBusy = false; }
+  }
+
+  /* ---------------------- 설정 모달 ---------------------- */
+  function openSettings() {
+    const c = GHSync.getCfg();
+    $("#setGroom").value = meta.groom || "";
+    $("#setBride").value = meta.bride || "";
+    $("#setDate").value = (meta.date || "").slice(0, 16);
+    $("#setVenue").value = meta.venue || "";
+    $("#setRepo").value = c.repoUrl || (c.owner && c.repo ? `https://github.com/${c.owner}/${c.repo}` : "");
+    $("#setPath").value = c.path || "data/plan.json";
+    $("#setToken").value = GHSync.getToken();
+    setSyncState(GHSync.ready() ? "ok" : "idle");
+    $("#settingsModal").classList.add("open");
+  }
+  const closeSettings = () => $("#settingsModal").classList.remove("open");
+  async function saveSettings() {
+    const firstConnect = appliedSha == null;
+    meta = {
+      ...meta,
+      groom: $("#setGroom").value.trim() || meta.groom,
+      bride: $("#setBride").value.trim() || meta.bride,
+      date: $("#setDate").value || meta.date,
+      venue: $("#setVenue").value.trim() || meta.venue,
+    };
+    const parsed = GHSync.parseRepo($("#setRepo").value);
+    GHSync.setCfg({ owner: parsed && parsed.owner, repo: parsed && parsed.repo, path: $("#setPath").value.trim() || "data/plan.json", branch: "main", repoUrl: $("#setRepo").value.trim() });
+    GHSync.setToken($("#setToken").value.trim());
+    pushHistory();
+    save();
+    renderSummary();
+    if (GHSync.ready() && firstConnect) { setSyncState("loading"); await remotePull(true); }
+    else setSyncState(GHSync.ready() ? "ok" : "idle");
+    closeSettings();
   }
 
   /* ---------------------- 분류 필터 칩 ---------------------- */
@@ -367,6 +459,7 @@
         r[f] = el.value;
         localStorage.setItem(KEY, stateJson());
       }
+      scheduleRemoteSave();
     });
     tb.addEventListener("change", (e) => {
       const el = e.target;
@@ -428,6 +521,13 @@
       }
     });
 
+    // 설정 모달
+    $("#settingsBtn").addEventListener("click", openSettings);
+    $("#setCancel").addEventListener("click", closeSettings);
+    $("#setSave").addEventListener("click", saveSettings);
+    $("#setPull").addEventListener("click", () => remotePull(true));
+    $("#settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
+
     if (!FS_OK) {
       $("#saveFileBtn").textContent = "💾 파일 다운로드";
       $("#openFileBtn").textContent = "📂 파일 업로드";
@@ -437,5 +537,9 @@
   const attr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
   bind(); render();
+  // 원격 동기화 초기화
+  if (GHSync.ready()) { setSyncState("loading"); remotePull(true); } else setSyncState("idle");
+  setInterval(() => { if (GHSync.ready() && !remoteBusy && saveTimer == null && document.visibilityState === "visible") remotePull(false); }, 25000);
+  window.addEventListener("focus", () => { if (GHSync.ready() && !remoteBusy && saveTimer == null) remotePull(false); });
   setInterval(renderCountdown, 60000);
 })();

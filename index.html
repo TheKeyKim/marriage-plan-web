@@ -46,10 +46,12 @@
       <button class="chip" data-view="table">📋 상세 표</button>
     </div>
     <div class="ctl-right">
+      <span class="sync-badge" id="syncBadge"></span>
       <span class="file-status" id="fileStatus"></span>
       <button class="btn sm" id="undoBtn" disabled>↩︎ 되돌리기</button>
       <button class="btn sm" id="openFileBtn">📂 열기</button>
       <button class="btn sm" id="saveFileBtn">💾 저장</button>
+      <button class="btn sm" id="settingsBtn">⚙ 설정</button>
       <button class="btn sm btn-ghost" id="resetBtn">초기화</button>
       <input type="file" id="importFile" accept="application/json" hidden />
     </div>
@@ -91,7 +93,37 @@
     <p class="muted">한국 결혼 준비 체크리스트 템플릿 · 개인정보는 저장되지 않습니다</p>
   </footer>
 
+  <!-- 설정 모달 -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+      <h3>설정</h3>
+      <section class="set-sec">
+        <h4>💒 예식 정보</h4>
+        <div class="set-grid">
+          <label>신랑<input type="text" id="setGroom" placeholder="신랑 이름"></label>
+          <label>신부<input type="text" id="setBride" placeholder="신부 이름"></label>
+          <label>예식일<input type="datetime-local" id="setDate"></label>
+          <label>예식장<input type="text" id="setVenue" placeholder="예식장"></label>
+        </div>
+      </section>
+      <section class="set-sec">
+        <h4>☁ GitHub 동기화 (JSON 저장)</h4>
+        <label class="set-full">저장소 링크<input type="text" id="setRepo" placeholder="https://github.com/사용자/레포"></label>
+        <label class="set-full">JSON 경로<input type="text" id="setPath" placeholder="data/plan.json"></label>
+        <label class="set-full">액세스 토큰 (PAT)<input type="password" id="setToken" placeholder="github_pat_..." autocomplete="off"></label>
+        <p class="set-hint">토큰은 이 브라우저에만 저장됩니다 · <a id="patLink" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">토큰 만들기 ↗</a> · 상태: <span id="syncState">미연결</span></p>
+      </section>
+      <div class="modal-actions">
+        <button class="btn" id="setPull">↓ 원격 불러오기</button>
+        <span class="spacer"></span>
+        <button class="btn" id="setCancel">닫기</button>
+        <button class="btn btn-primary" id="setSave">저장 &amp; 연결</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/data.js"></script>
+  <script src="js/github-sync.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

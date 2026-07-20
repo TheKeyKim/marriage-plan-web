@@ -160,3 +160,22 @@ td input.in-num { min-width: 48px; }
   .c-del::before { content: ""; }
   .del { justify-self: start; }
 }
+
+/* ---------------- 설정 모달 + 동기화 배지 ---------------- */
+.sync-badge { font-size: .76rem; color: var(--ok); white-space: nowrap; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(50,40,30,.45); display: none; align-items: center; justify-content: center; z-index: 60; padding: 20px; }
+.modal-backdrop.open { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius); padding: 20px 22px; width: 100%; max-width: 460px; box-shadow: 0 20px 50px rgba(0,0,0,.25); max-height: 90vh; overflow-y: auto; }
+.modal h3 { margin: 0 0 12px; font-family: "Gowun Batang", serif; }
+.set-sec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.set-sec:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+.set-sec h4 { margin: 0 0 10px; font-size: .92rem; color: var(--beige-dark); }
+.set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.modal label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--ink-soft); margin-bottom: 9px; }
+.modal label.set-full { width: 100%; }
+.modal label input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: .9rem; color: var(--ink); background: #fff; }
+.modal label input:focus { outline: none; border-color: var(--gold); }
+.set-hint { font-size: .74rem; color: var(--ink-soft); margin: 2px 0 0; line-height: 1.6; }
+.set-hint a { color: var(--beige-dark); }
+.modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.modal-actions .spacer { flex: 1; }
