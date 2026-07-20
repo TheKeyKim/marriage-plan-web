@@ -31,7 +31,7 @@
   let pending = null;
   const snapshot = () => JSON.stringify({ meta, categories: cats, rows });
   // ---- 원격 동기화 상태 ----
-  let saveTimer = null, remoteBusy = false, appliedSha = null;
+  let saveTimer = null, remoteBusy = false, appliedSha = null, fromFilePending = false;
   const currentState = () => ({ meta, categories: cats, rows });
   function pushHistory(snap) {
     history.push(snap != null ? snap : snapshot());
@@ -89,7 +89,7 @@
       [fileHandle] = await window.showOpenFilePicker({ types: pickerTypes });
       const text = await (await fileHandle.getFile()).text();
       pushHistory(); applyImported(JSON.parse(text));
-      await writeFile(); markFile();
+      markFile(); afterFileLoad();
     } catch (e) { /* 취소/실패 */ }
   }
   async function writeFile() {
@@ -155,7 +155,7 @@
     const map = {
       idle: "", loading: "⟳ 불러오는 중…", pending: "… 저장 대기", saving: "⟳ 저장 중…",
       pushed: "✓ 저장됨", pulled: "↓ 원격 불러옴", empty: "원격 비어있어 올림",
-      conflict: "↺ 원격 기준으로 갱신됨", error: "⚠ 오류",
+      conflict: "↺ 원격 기준으로 갱신됨", fileLoaded: "📄 파일 로드됨 · 🔄로 저장소와 동기화", error: "⚠ 오류",
     };
     let txt = map[kind] != null ? map[kind] : "";
     if (kind === "pulled" && extra != null) txt += ` ${extra}개`;
@@ -165,7 +165,7 @@
     const s = $("#syncState"); if (s) s.textContent = GHSync.ready() ? (txt || "연결됨") : "미연결";
   }
   function scheduleRemoteSave() {
-    if (!GHSync.ready()) return;
+    if (!GHSync.ready() || fromFilePending) return;
     setSyncState("pending");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => { saveTimer = null; doRemoteSave(); }, 2500);
@@ -206,9 +206,33 @@
     } catch (e) { setSyncState("error", e); }
     finally { remoteBusy = false; }
   }
-  // 수동 동기화(🔄): 대기 편집을 먼저 저장(충돌 시 원격이 이김) → 원격 최신을 적용
+  // 파일로 열기 후: 로컬만 보존, 자동 푸시 보류 (원격과의 방향은 🔄에서 선택)
+  function afterFileLoad() {
+    localStorage.setItem(KEY, stateJson());
+    clearTimeout(saveTimer); saveTimer = null;
+    renderSummary();
+    fromFilePending = GHSync.ready();
+    if (fromFilePending) setSyncState("fileLoaded");
+  }
+  // 수동 동기화(🔄)
   async function syncNow() {
     if (!GHSync.ready()) { openSettings(); return; }
+    if (fromFilePending) {
+      remoteBusy = true;
+      try {
+        const res = await GHSync.load();
+        if (!res) { remoteBusy = false; await doRemoteSave(); }                      // 원격 없음 → 파일 내용 올림
+        else if (JSON.stringify(res.state) === JSON.stringify(currentState())) {      // 동일 → 그대로
+          appliedSha = res.sha; setSyncState("pulled", (res.state.rows || []).length);
+        } else {
+          const push = confirm("열어둔 파일 내용이 저장소와 다릅니다.\n\n[확인] 파일 내용을 저장소에 저장(밀어넣기)\n[취소] 저장소 내용으로 이 화면 덮어쓰기");
+          if (push) { GHSync.lastSha = res.sha; remoteBusy = false; await doRemoteSave(); }   // 파일 → 저장소
+          else { applyRemote(res.state); appliedSha = res.sha; setSyncState("pulled", (res.state.rows || []).length); } // 저장소 → 화면
+        }
+      } catch (e) { setSyncState("error", e); }
+      finally { remoteBusy = false; fromFilePending = false; }
+      return;
+    }
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await doRemoteSave(); }
     await remotePull(true);
   }
@@ -518,7 +542,7 @@
       rd.onload = () => {
         try {
           if (!confirm("현재 내용을 이 파일로 덮어쓸까요? (되돌리기로 복구 가능)")) return;
-          pushHistory(); applyImported(JSON.parse(rd.result)); save();
+          pushHistory(); applyImported(JSON.parse(rd.result)); afterFileLoad();
         } catch { alert("올바른 JSON이 아닙니다."); }
       };
       rd.readAsText(f); e.target.value = "";
@@ -554,7 +578,7 @@
   bind(); render();
   // 원격 동기화 초기화
   if (GHSync.ready()) { setSyncState("loading"); remotePull(true); } else setSyncState("idle");
-  setInterval(() => { if (GHSync.ready() && !remoteBusy && saveTimer == null && document.visibilityState === "visible") remotePull(false); }, 25000);
-  window.addEventListener("focus", () => { if (GHSync.ready() && !remoteBusy && saveTimer == null) remotePull(false); });
+  setInterval(() => { if (GHSync.ready() && !remoteBusy && !fromFilePending && saveTimer == null && document.visibilityState === "visible") remotePull(false); }, 25000);
+  window.addEventListener("focus", () => { if (GHSync.ready() && !remoteBusy && !fromFilePending && saveTimer == null) remotePull(false); });
   setInterval(renderCountdown, 60000);
 })();
