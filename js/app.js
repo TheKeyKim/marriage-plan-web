@@ -150,11 +150,16 @@
     $("#ddate").textContent = isNaN(t) ? "예식일 미설정" : t.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
   }
 
-  /* ---------------------- 원격 동기화 (GitHub) ---------------------- */
+  /* ---------------------- 원격 동기화 (GitHub · 무조건 원격 우선) ---------------------- */
   function setSyncState(kind, extra) {
-    const map = { idle: "", loading: "⟳ 불러오는 중…", pending: "… 저장 대기", saving: "⟳ 저장 중…", ok: "✓ 동기화됨", empty: "원격 비어있음", error: "⚠ 오류" };
+    const map = {
+      idle: "", loading: "⟳ 불러오는 중…", pending: "… 저장 대기", saving: "⟳ 저장 중…",
+      pushed: "✓ 저장됨", pulled: "↓ 원격 불러옴", empty: "원격 비어있어 올림",
+      conflict: "↺ 원격 기준으로 갱신됨", error: "⚠ 오류",
+    };
     let txt = map[kind] != null ? map[kind] : "";
-    if (kind === "ok") txt += " " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    if (kind === "pulled" && extra != null) txt += ` ${extra}개`;
+    if (["pushed", "pulled", "conflict", "empty"].includes(kind)) txt += " · " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
     if (kind === "error" && extra) txt += ": " + (extra.msg || extra.status || "");
     const b = $("#syncBadge"); if (b) b.textContent = txt;
     const s = $("#syncState"); if (s) s.textContent = GHSync.ready() ? (txt || "연결됨") : "미연결";
@@ -171,12 +176,13 @@
     remoteBusy = true; setSyncState("saving");
     try {
       await GHSync.save(currentState());
-      appliedSha = GHSync.lastSha; setSyncState("ok");
+      appliedSha = GHSync.lastSha; setSyncState("pushed");
     } catch (e) {
       if (e && e.conflict) {
-        const pull = confirm("상대가 먼저 저장했어요.\n\n[확인] 원격 내용 불러오기 (내 변경은 ‘되돌리기’로 복구 가능)\n[취소] 내 내용으로 덮어쓰기");
-        if (pull) { remoteBusy = false; await remotePull(true); }
-        else { try { await GHSync.load(); await GHSync.save(currentState()); appliedSha = GHSync.lastSha; setSyncState("ok"); } catch (e2) { setSyncState("error", e2); } }
+        // 원격 우선: 충돌 시 프롬프트 없이 원격을 받아 적용 (내 직전 변경은 ‘되돌리기’로 복구)
+        remoteBusy = false;
+        await remotePull(true);
+        setSyncState("conflict");
       } else setSyncState("error", e);
     } finally { remoteBusy = false; }
   }
@@ -195,10 +201,16 @@
     remoteBusy = true;
     try {
       const res = await GHSync.load();
-      if (!res) { setSyncState("empty"); if (force) { await doRemoteSave(); } }
-      else if (force || res.sha !== appliedSha) { applyRemote(res.state); appliedSha = res.sha; setSyncState("ok"); }
+      if (!res) { if (force) { remoteBusy = false; await doRemoteSave(); } setSyncState("empty"); }
+      else if (force || res.sha !== appliedSha) { applyRemote(res.state); appliedSha = res.sha; setSyncState("pulled", (res.state.rows || []).length); }
     } catch (e) { setSyncState("error", e); }
     finally { remoteBusy = false; }
+  }
+  // 수동 동기화(🔄): 대기 편집을 먼저 저장(충돌 시 원격이 이김) → 원격 최신을 적용
+  async function syncNow() {
+    if (!GHSync.ready()) { openSettings(); return; }
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await doRemoteSave(); }
+    await remotePull(true);
   }
 
   /* ---------------------- 설정 모달 ---------------------- */
@@ -231,7 +243,7 @@
     save();
     renderSummary();
     if (GHSync.ready() && firstConnect) { setSyncState("loading"); await remotePull(true); }
-    else setSyncState(GHSync.ready() ? "ok" : "idle");
+    else if (!GHSync.ready()) setSyncState("idle");
     closeSettings();
   }
 
@@ -521,6 +533,8 @@
       }
     });
 
+    // 동기화 버튼 (원격 최신 반영)
+    $("#syncBtn").addEventListener("click", syncNow);
     // 설정 모달
     $("#settingsBtn").addEventListener("click", openSettings);
     $("#setCancel").addEventListener("click", closeSettings);

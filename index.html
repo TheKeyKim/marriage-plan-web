@@ -49,6 +49,7 @@
       <span class="sync-badge" id="syncBadge"></span>
       <span class="file-status" id="fileStatus"></span>
       <button class="btn sm" id="undoBtn" disabled>↩︎ 되돌리기</button>
+      <button class="btn sm" id="syncBtn" title="원격에서 최신 불러오기 (원격 우선)">🔄 동기화</button>
       <button class="btn sm" id="openFileBtn">📂 열기</button>
       <button class="btn sm" id="saveFileBtn">💾 저장</button>
       <button class="btn sm" id="settingsBtn">⚙ 설정</button>
@@ -112,12 +113,13 @@
         <label class="set-full">JSON 경로<input type="text" id="setPath" placeholder="data/plan.json"></label>
         <label class="set-full">액세스 토큰 (PAT)<input type="password" id="setToken" placeholder="github_pat_..." autocomplete="off"></label>
         <p class="set-hint">토큰은 이 브라우저에만 저장됩니다 · <a id="patLink" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">토큰 만들기 ↗</a> · 상태: <span id="syncState">미연결</span></p>
+        <p class="set-note">💡 <b>연결하기</b>를 누르면 저장소의 공용 데이터를 <b>불러옵니다</b>. 이후엔 열면 자동 불러오기 · 고치면 자동 저장이며, <b>항상 원격(repo)이 우선</b>입니다.</p>
       </section>
       <div class="modal-actions">
-        <button class="btn" id="setPull">↓ 원격 불러오기</button>
+        <button class="btn" id="setPull" title="원격 → 이 화면 (강제)">↓ 지금 불러오기</button>
         <span class="spacer"></span>
         <button class="btn" id="setCancel">닫기</button>
-        <button class="btn btn-primary" id="setSave">저장 &amp; 연결</button>
+        <button class="btn btn-primary" id="setSave">연결하기</button>
       </div>
     </div>
   </div>

@@ -179,3 +179,4 @@ td input.in-num { min-width: 48px; }
 .set-hint a { color: var(--beige-dark); }
 .modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
 .modal-actions .spacer { flex: 1; }
+.set-note { font-size: .78rem; color: var(--ink); background: #fbf6ee; border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; line-height: 1.55; }
