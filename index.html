@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>우리 결혼 준비 체크리스트 💍</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <h1>우리 결혼 준비 체크리스트</h1>
+        <p class="couple" id="coupleLine">신랑 · 신부</p>
+      </div>
+      <div class="countdown">
+        <span class="d-day" id="dday">D-—</span>
+        <span class="d-date" id="ddate">예식일</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 슬림 요약 바 -->
+  <section class="statbar">
+    <div class="stat"><span class="lbl">예상 총액</span><b class="val" id="sumTotal">0원</b></div>
+    <div class="sep"></div>
+    <div class="stat"><span class="lbl">💰 낸 돈</span><b class="val paid" id="sumPaid">0원</b></div>
+    <div class="sep"></div>
+    <div class="stat"><span class="lbl">🧾 앞으로 낼 돈</span><b class="val todo" id="sumTodo">0원</b></div>
+    <div class="sep"></div>
+    <div class="stat"><span class="lbl">필수 완료</span><b class="val" id="sumRequired">0 / 0</b></div>
+    <div class="sep"></div>
+    <div class="stat grow">
+      <span class="lbl">전체 진행률 <span id="progressText">0%</span></span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+  </section>
+  <p class="unknown-note" id="sumUnknown"></p>
+
+  <!-- 컨트롤: 화면 전환 + 유틸리티 -->
+  <div class="controls">
+    <div class="view-toggle" id="viewToggle">
+      <button class="chip active" data-view="overview">🪟 한눈에 보기</button>
+      <button class="chip" data-view="table">📋 상세 표</button>
+    </div>
+    <div class="ctl-right">
+      <span class="file-status" id="fileStatus"></span>
+      <button class="btn sm" id="undoBtn" disabled>↩︎ 되돌리기</button>
+      <button class="btn sm" id="openFileBtn">📂 열기</button>
+      <button class="btn sm" id="saveFileBtn">💾 저장</button>
+      <button class="btn sm btn-ghost" id="resetBtn">초기화</button>
+      <input type="file" id="importFile" accept="application/json" hidden />
+    </div>
+  </div>
+
+  <!-- 분류 필터 -->
+  <div class="cat-chips" id="catChips"><!-- 분류 칩 --></div>
+
+  <!-- 개요(한눈에 보기) -->
+  <section class="overview" id="overview"><!-- 렌더링 --></section>
+
+  <!-- 상세 표 -->
+  <div class="table-panel" id="tableView" hidden>
+    <button class="add-row top" data-add>＋ 행 추가</button>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr id="head">
+            <th data-key="done">✔</th>
+            <th data-key="type">구분 <span class="arrow"></span></th>
+            <th data-key="category">분류 <span class="arrow"></span></th>
+            <th data-key="item">항목 <span class="arrow"></span></th>
+            <th data-key="opt">선택지 / 업체 <span class="arrow"></span></th>
+            <th data-key="price" class="num">금액 <span class="arrow"></span></th>
+            <th data-key="deposit" class="num">계약금 <span class="arrow"></span></th>
+            <th data-key="status">상태 <span class="arrow"></span></th>
+            <th data-key="memo">비고 <span class="arrow"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <button class="add-row" data-add>＋ 행 추가</button>
+  </div>
+
+  <footer class="app-footer">
+    <p>변경사항은 이 브라우저에 자동 저장됩니다. <b>💾 저장</b>으로 JSON 파일에도 실시간 기록할 수 있어요.</p>
+    <p class="muted">한국 결혼 준비 체크리스트 템플릿 · 개인정보는 저장되지 않습니다</p>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

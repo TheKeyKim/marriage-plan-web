@@ -1,0 +1,11 @@
+# Claude Code local tooling
+.claude/
+
+# 개인 데이터 (실수로도 커밋되지 않도록)
+plan.json
+*.local.json
+*.secret.*
+
+# OS
+.DS_Store
+Thumbs.db

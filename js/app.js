@@ -1,0 +1,441 @@
+/* =========================================================================
+ * app.js — 결혼 준비 체크리스트
+ *  · 개요(한눈에 보기) / 상세 표 두 화면
+ *  · 분류: 필터 + 직접 추가/이름변경/삭제
+ *  · 돈 계산 · 되돌리기(undo) · JSON 파일 영속성
+ * ========================================================================= */
+(function () {
+  "use strict";
+
+  const KEY = "marriage-plan-v3";
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  // ---- 상태 로드 (저장 구조: {categories, rows}; 과거 배열 형태도 허용) ----
+  const _saved = loadLocal();
+  let cats, rows;
+  if (Array.isArray(_saved)) { cats = CATEGORIES.map((c) => ({ ...c })); rows = _saved; }
+  else if (_saved && Array.isArray(_saved.rows)) {
+    cats = Array.isArray(_saved.categories) ? _saved.categories : CATEGORIES.map((c) => ({ ...c }));
+    rows = _saved.rows;
+  } else { cats = CATEGORIES.map((c) => ({ ...c })); rows = DEFAULT_ROWS.map((r) => ({ ...r })); }
+
+  let sort = { key: null, dir: 1 };
+  let view = "overview";          // 'overview' | 'table'
+  let catFilter = "all";          // 'all' | category id
+  let fileHandle = null;
+
+  // ---- 되돌리기 히스토리 (분류+행 함께 스냅샷) ----
+  const history = [];
+  let pending = null;
+  const snapshot = () => JSON.stringify({ categories: cats, rows });
+  function pushHistory(snap) {
+    history.push(snap != null ? snap : snapshot());
+    if (history.length > 50) history.shift();
+    refreshUndo();
+  }
+  const refreshUndo = () => { const b = $("#undoBtn"); if (b) b.disabled = history.length === 0; };
+  function undo() {
+    if (!history.length) return;
+    const s = JSON.parse(history.pop());
+    cats = s.categories || cats;
+    rows = s.rows || [];
+    pending = null;
+    if (catFilter !== "all" && !cats.some((c) => c.id === catFilter)) catFilter = "all";
+    render(); save(); refreshUndo();
+  }
+
+  // ---- 금액 (완료 = 전액 지불 간주) ----
+  const won = (v) => (v == null ? "미정" : v.toLocaleString("ko-KR") + "만원");
+  const balance = (r) => (r.done ? 0 : r.price == null ? null : r.price - (r.deposit || 0));
+  const paid = (r) => (r.done ? (r.price != null ? r.price : r.deposit || 0) : r.deposit || 0);
+  const todo = (r) => (r.done ? 0 : r.price == null ? 0 : r.price - (r.deposit || 0));
+
+  const STATUS_CLS = { "검토중": "s-idea", "예정": "s-plan", "계약": "s-book", "완료": "s-done" };
+  const newId = () => "cat_" + Math.random().toString(36).slice(2, 8);
+
+  /* ---------------------- 저장 / 로드 ---------------------- */
+  function loadLocal() {
+    try { const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
+    catch { return null; }
+  }
+  const stateJson = () => JSON.stringify({ categories: cats, rows });
+  async function save() {
+    localStorage.setItem(KEY, stateJson());
+    renderSummary();
+    await writeFile();
+  }
+
+  /* ---------------------- 파일 영속성 (JSON) ---------------------- */
+  const FS_OK = "showSaveFilePicker" in window;
+  const pickerTypes = [{ description: "JSON", accept: { "application/json": [".json"] } }];
+
+  async function connectSave() {
+    if (!FS_OK) return downloadJson();
+    try {
+      fileHandle = await window.showSaveFilePicker({ suggestedName: "marriage-plan.json", types: pickerTypes });
+      await writeFile(); markFile();
+    } catch (e) { /* 취소 */ }
+  }
+  async function connectOpen() {
+    if (!FS_OK) return $("#importFile").click();
+    try {
+      [fileHandle] = await window.showOpenFilePicker({ types: pickerTypes });
+      const text = await (await fileHandle.getFile()).text();
+      pushHistory(); applyImported(JSON.parse(text));
+      await writeFile(); markFile();
+    } catch (e) { /* 취소/실패 */ }
+  }
+  async function writeFile() {
+    if (!fileHandle) return;
+    try { const w = await fileHandle.createWritable(); await w.write(JSON.stringify({ categories: cats, rows }, null, 2)); await w.close(); }
+    catch (e) { console.warn("파일 저장 실패", e); }
+  }
+  function markFile() {
+    const el = $("#fileStatus");
+    el.textContent = fileHandle ? `● 파일 연동됨: ${fileHandle.name}` : "";
+    el.classList.toggle("on", !!fileHandle);
+  }
+  function downloadJson() {
+    const blob = new Blob([JSON.stringify({ categories: cats, rows }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "marriage-plan.json"; a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function applyImported(data) {
+    if (Array.isArray(data)) { rows = data; }
+    else if (data && Array.isArray(data.rows)) {
+      rows = data.rows;
+      if (Array.isArray(data.categories)) cats = data.categories;
+    } else throw new Error("형식 오류");
+    render();
+  }
+
+  /* ---------------------- 요약 대시보드 ---------------------- */
+  function renderSummary() {
+    let total = 0, paidSum = 0, todoSum = 0, unknown = 0;
+    rows.forEach((r) => {
+      total += r.price != null ? r.price : r.deposit || 0;
+      paidSum += paid(r);
+      todoSum += todo(r);
+      if (r.price == null && !r.done) unknown++;
+    });
+    const req = rows.filter((r) => r.type === "필수");
+    const reqDone = req.filter((r) => r.done).length;
+    const allDone = rows.filter((r) => r.done).length;
+    const pct = rows.length ? Math.round((allDone / rows.length) * 100) : 0;
+
+    $("#sumTotal").textContent = won(total);
+    $("#sumPaid").textContent = won(paidSum);
+    $("#sumTodo").textContent = won(todoSum);
+    $("#sumUnknown").textContent = unknown ? `※ 금액 미정 ${unknown}건 (총액 일부 미반영)` : "";
+    $("#sumRequired").textContent = `${reqDone} / ${req.length}`;
+    $("#progressFill").style.width = pct + "%";
+    $("#progressText").textContent = `${allDone}/${rows.length} · ${pct}%`;
+
+    $("#coupleLine").textContent = `${META.groom} · ${META.bride}  |  ${META.venue}`;
+    renderCountdown();
+  }
+  function renderCountdown() {
+    const t = new Date(META.date), now = new Date();
+    const d = Math.ceil((t - now) / 86400000);
+    $("#dday").textContent = d > 0 ? `D-${d}` : d === 0 ? "D-DAY" : `D+${-d}`;
+    $("#ddate").textContent = t.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+  }
+
+  /* ---------------------- 분류 필터 칩 ---------------------- */
+  function buildChips() {
+    const wrap = $("#catChips");
+    const chip = (id, label, icon, cls = "") =>
+      `<button class="chip ${cls} ${catFilter === id ? "active" : ""}" data-cat="${id}">${icon ? icon + " " : ""}${attr(label)}</button>`;
+    wrap.innerHTML =
+      chip("all", "전체", "🗂️") +
+      cats.map((c) => chip(c.id, c.name, c.icon)).join("") +
+      `<button class="chip add-cat" data-addcat="1" title="분류 추가">＋ 분류</button>`;
+  }
+
+  /* ---------------------- 분류 추가 / 이름변경 / 삭제 ---------------------- */
+  function addCategory() {
+    const name = (prompt("새 분류 이름을 입력하세요:") || "").trim();
+    if (!name) return;
+    pushHistory();
+    const c = { id: newId(), name, icon: "🏷️" };
+    cats.push(c);
+    catFilter = c.id;
+    render(); save();
+  }
+  function renameCategory(id) {
+    const c = cats.find((x) => x.id === id); if (!c) return;
+    const name = (prompt("분류 이름 수정:", c.name) || "").trim();
+    if (!name || name === c.name) return;
+    pushHistory(); c.name = name; render(); save();
+  }
+  function deleteCategory(id) {
+    const c = cats.find((x) => x.id === id); if (!c) return;
+    const used = rows.filter((r) => r.category === id).length;
+    const msg = used ? `'${c.name}' 분류를 삭제하면 항목 ${used}개가 '미분류'로 이동합니다. 삭제할까요?`
+      : `'${c.name}' 분류를 삭제할까요?`;
+    if (!confirm(msg)) return;
+    pushHistory();
+    rows.forEach((r) => { if (r.category === id) r.category = "_none"; });
+    cats = cats.filter((x) => x.id !== id);
+    if (catFilter === id) catFilter = "all";
+    render(); save();
+  }
+
+  /* ---------------------- 화면 전환 ---------------------- */
+  function render() {
+    buildChips();
+    const isOv = view === "overview";
+    $("#overview").hidden = !isOv;
+    $("#tableView").hidden = isOv;
+    $$("#viewToggle .chip").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+    if (isOv) renderOverview(); else renderTable();
+    renderSummary();
+  }
+
+  const inFilter = (r) => catFilter === "all" || r.category === catFilter;
+  // 개요/필터에 쓸 분류 목록 (미분류 항목이 있으면 가상 분류 추가)
+  function visibleCats() {
+    const list = cats.slice();
+    if (rows.some((r) => !cats.some((c) => c.id === r.category)))
+      list.push({ id: "_none", name: "미분류", icon: "❓" });
+    return list;
+  }
+
+  /* ---------------------- 개요(한눈에 보기) ---------------------- */
+  function renderOverview() {
+    const wrap = $("#overview");
+    wrap.innerHTML = "";
+    const list = visibleCats().filter((c) => catFilter === "all" || c.id === catFilter);
+    list.forEach((c) => {
+      const items = rows.map((r, i) => ({ r, i })).filter((x) =>
+        x.r.category === c.id || (c.id === "_none" && !cats.some((cc) => cc.id === x.r.category)));
+      if (!items.length) return;
+      const done = items.filter((x) => x.r.done).length;
+      const pct = Math.round((done / items.length) * 100);
+      const card = document.createElement("section");
+      card.className = "ov-card";
+      card.innerHTML = `
+        <div class="ov-head">
+          <span class="ov-icon">${c.icon}</span>
+          <h3>${attr(c.name)}</h3>
+          <span class="ov-count ${done === items.length ? "full" : ""}">${done}/${items.length}</span>
+        </div>
+        <div class="ov-bar"><div class="ov-fill" style="width:${pct}%"></div></div>
+        <ul class="ov-list">${items.map((x) => ovItem(x.r, x.i)).join("")}</ul>
+        ${c.id === "_none" ? "" : `<button class="ov-add" data-add="${c.id}">＋ 항목 추가</button>`}`;
+      wrap.appendChild(card);
+    });
+    if (!wrap.children.length) wrap.innerHTML = `<p class="empty">해당 분류에 항목이 없습니다.</p>
+      <button class="add-row" data-add>＋ 행 추가</button>`;
+  }
+  function ovItem(r, i) {
+    const cls = STATUS_CLS[r.status] || "s-idea";
+    const amt = r.done ? (r.price != null ? "완납 " + won(r.price) : "완납") : r.price != null ? won(r.price) : "";
+    return `<li class="ov-item ${r.done ? "done" : ""}" data-i="${i}" title="클릭하면 완료 표시 전환">
+      <span class="ov-check">${r.done ? "✓" : ""}</span>
+      <span class="ov-name">${attr(r.item)}</span>
+      <span class="ov-badge ${cls}">${r.status}</span>
+      <span class="ov-amt">${amt}</span>
+    </li>`;
+  }
+
+  /* ---------------------- 상세 표 ---------------------- */
+  function sortedRows() {
+    let list = rows.map((r, i) => ({ r, i })).filter((x) => inFilter(x.r));
+    if (!sort.key) return list;
+    const k = sort.key;
+    return list.sort((A, B) => {
+      let va = k === "balance" ? balance(A.r) : A.r[k];
+      let vb = k === "balance" ? balance(B.r) : B.r[k];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === "number") return (va - vb) * sort.dir;
+      if (typeof va === "boolean") return (va === vb ? 0 : va ? -1 : 1) * sort.dir;
+      return String(va).localeCompare(String(vb), "ko") * sort.dir;
+    });
+  }
+  function renderTable() {
+    const tb = $("#tbody");
+    tb.innerHTML = "";
+    const list = sortedRows();
+    if (!list.length) { tb.innerHTML = `<tr><td colspan="10" class="empty">해당 분류에 항목이 없습니다.</td></tr>`; return; }
+    list.forEach(({ r, i }) => tb.appendChild(rowEl(r, i)));
+  }
+  function catOptions(sel) {
+    const known = cats.some((c) => c.id === sel);
+    return cats.map((c) => `<option value="${c.id}" ${c.id === sel ? "selected" : ""}>${attr(c.name)}</option>`).join("") +
+      (known ? "" : `<option value="${attr(sel)}" selected>미분류</option>`);
+  }
+  function rowEl(r, i) {
+    const tr = document.createElement("tr");
+    if (r.done) tr.className = "done";
+    tr.innerHTML = `
+      <td class="c-done" data-label="완료"><input type="checkbox" data-i="${i}" data-f="done" ${r.done ? "checked" : ""}></td>
+      <td class="c-type" data-label="구분"><button class="toggle ${r.type === "필수" ? "req" : "opt"}" data-i="${i}" title="필수↔선택 전환">${r.type}</button></td>
+      <td class="c-cat" data-label="분류"><select data-i="${i}" data-f="category">${catOptions(r.category)}</select></td>
+      <td data-label="항목"><input class="in-item" data-i="${i}" data-f="item" value="${attr(r.item)}" placeholder="항목명"></td>
+      <td data-label="선택지/업체"><input class="in-opt" data-i="${i}" data-f="opt" value="${attr(r.opt)}" placeholder="선택지 / 업체"></td>
+      <td class="num" data-label="금액(만원)"><input type="number" min="0" class="in-num" data-i="${i}" data-f="price" value="${r.price ?? ""}" placeholder="미정"></td>
+      <td class="num" data-label="계약금(만원)"><input type="number" min="0" class="in-num" data-i="${i}" data-f="deposit" value="${r.deposit ?? ""}" placeholder="0"></td>
+      <td class="c-status" data-label="상태"><select data-i="${i}" data-f="status">${STATUSES.map((s) => `<option ${r.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+      <td class="c-memo" data-label="비고"><input class="in-memo" data-i="${i}" data-f="memo" value="${attr(r.memo)}" placeholder="메모…"></td>
+      <td class="c-del" data-label=""><button class="del" data-i="${i}" title="행 삭제">삭제</button></td>`;
+    return tr;
+  }
+
+  /* ---------------------- 이벤트 ---------------------- */
+  // 행 추가 (분류 지정 시 그 분류로, 표 화면으로 전환 후 항목명 포커스)
+  function addRow(cat) {
+    pushHistory();
+    const c = cat || (catFilter !== "all" && catFilter !== "_none" ? catFilter : (cats[0] && cats[0].id) || "admin");
+    rows.push({ category: c, done: false, type: "선택", item: "", opt: "", price: null, deposit: 0, status: "검토중", memo: "" });
+    if (cat && cat !== catFilter) catFilter = cat;
+    view = "table";
+    sort.key = null;
+    $$("#head .arrow").forEach((a) => (a.textContent = ""));
+    render(); save();
+    const inp = $("#tbody tr:last-child .in-item");
+    if (inp) { inp.focus(); inp.scrollIntoView({ block: "center" }); }
+  }
+
+  function setDone(r, on) {
+    // 완료 = 완납. 금액이 미정이면 실제 완납 금액을 받아 기록한다.
+    if (on && r.price == null) {
+      const v = prompt(`'${r.item}' 완납 금액(만원)을 입력하세요.\n(모르면 비워두고 확인)`, r.deposit || "");
+      if (v != null && v.trim() !== "" && !isNaN(Number(v))) r.price = Number(v);
+    }
+    r.done = on;
+    r.status = on ? "완료" : (r.status === "완료" ? "예정" : r.status);
+  }
+
+  function bind() {
+    // 화면 전환
+    $("#viewToggle").addEventListener("click", (e) => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      view = b.dataset.view; render();
+    });
+    // 분류 필터 / 추가 (더블클릭=이름변경, Alt·우클릭=삭제)
+    $("#catChips").addEventListener("click", (e) => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      if (b.dataset.addcat) { addCategory(); return; }
+      const id = b.dataset.cat;
+      if (e.altKey && id !== "all" && id !== "_none") { deleteCategory(id); return; }
+      catFilter = id; render();
+    });
+    $("#catChips").addEventListener("dblclick", (e) => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      const id = b.dataset.cat;
+      if (id && id !== "all" && id !== "_none" && !b.dataset.addcat) renameCategory(id);
+    });
+    $("#catChips").addEventListener("contextmenu", (e) => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      const id = b.dataset.cat;
+      if (id && id !== "all" && id !== "_none" && !b.dataset.addcat) { e.preventDefault(); deleteCategory(id); }
+    });
+    // 행 추가 (표 위/아래 버튼, 개요 분류별 "+항목") — data-add 위임
+    document.addEventListener("click", (e) => {
+      const el = e.target.closest("[data-add]");
+      if (el) { addRow(el.getAttribute("data-add") || undefined); }
+    });
+    // 개요: 항목 클릭 → 완료 토글
+    $("#overview").addEventListener("click", (e) => {
+      if (e.target.closest("[data-add]")) return;
+      const li = e.target.closest(".ov-item"); if (!li) return;
+      pushHistory();
+      setDone(rows[li.dataset.i], !rows[li.dataset.i].done);
+      render(); save();
+    });
+
+    const tb = $("#tbody");
+    tb.addEventListener("focusin", (e) => { if (e.target.dataset && e.target.dataset.f) pending = snapshot(); });
+    tb.addEventListener("input", (e) => {
+      const el = e.target;
+      if (!el.dataset.f) return;
+      if (el.type === "checkbox" || el.tagName === "SELECT") return;
+      if (pending != null) { pushHistory(pending); pending = null; }
+      const r = rows[el.dataset.i], f = el.dataset.f;
+      if (f === "price" || f === "deposit") {
+        r[f] = el.value.trim() === "" ? (f === "deposit" ? 0 : null) : Number(el.value);
+        const bc = el.closest("tr").querySelector(".bal");
+        if (bc) bc.textContent = won(balance(r));
+        localStorage.setItem(KEY, stateJson());
+        renderSummary();
+      } else {
+        r[f] = el.value;
+        localStorage.setItem(KEY, stateJson());
+      }
+    });
+    tb.addEventListener("change", (e) => {
+      const el = e.target;
+      if (!el.dataset.f) return;
+      const r = rows[el.dataset.i], f = el.dataset.f;
+      if (f === "done") { pushHistory(); setDone(r, el.checked); render(); }
+      else if (f === "status") {
+        if (pending != null) { pushHistory(pending); pending = null; } else pushHistory();
+        r.status = el.value; r.done = el.value === "완료"; render();
+      } else if (f === "category") {
+        if (pending != null) { pushHistory(pending); pending = null; } else pushHistory();
+        r.category = el.value; render();
+      }
+      save();
+    });
+    tb.addEventListener("click", (e) => {
+      const tg = e.target.closest(".toggle");
+      if (tg) { pushHistory(); const r = rows[tg.dataset.i]; r.type = r.type === "필수" ? "선택" : "필수"; render(); save(); return; }
+      const del = e.target.closest(".del");
+      if (del) { pushHistory(); rows.splice(Number(del.dataset.i), 1); render(); save(); return; }
+    });
+
+    // 헤더 정렬
+    $("#head").addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-key]"); if (!th) return;
+      const key = th.dataset.key;
+      sort.dir = sort.key === key ? -sort.dir : 1;
+      sort.key = key;
+      $$("#head .arrow").forEach((a) => (a.textContent = ""));
+      th.querySelector(".arrow").textContent = sort.dir === 1 ? "▲" : "▼";
+      renderTable();
+    });
+
+    // 되돌리기
+    $("#undoBtn").addEventListener("click", undo);
+
+
+    // 파일
+    $("#saveFileBtn").addEventListener("click", connectSave);
+    $("#openFileBtn").addEventListener("click", connectOpen);
+    $("#importFile").addEventListener("change", (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        try {
+          if (!confirm("현재 내용을 이 파일로 덮어쓸까요? (되돌리기로 복구 가능)")) return;
+          pushHistory(); applyImported(JSON.parse(rd.result)); save();
+        } catch { alert("올바른 JSON이 아닙니다."); }
+      };
+      rd.readAsText(f); e.target.value = "";
+    });
+    $("#resetBtn").addEventListener("click", () => {
+      if (confirm("기본값으로 초기화할까요? (되돌리기로 복구 가능)")) {
+        pushHistory();
+        cats = CATEGORIES.map((c) => ({ ...c }));
+        rows = DEFAULT_ROWS.map((r) => ({ ...r }));
+        catFilter = "all";
+        render(); save();
+      }
+    });
+
+    if (!FS_OK) {
+      $("#saveFileBtn").textContent = "💾 파일 다운로드";
+      $("#openFileBtn").textContent = "📂 파일 업로드";
+    }
+  }
+
+  const attr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+  bind(); render();
+  setInterval(renderCountdown, 60000);
+})();
