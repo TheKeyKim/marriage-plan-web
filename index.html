@@ -6,7 +6,7 @@
   <title>우리 결혼 준비 체크리스트 💍</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css?v=2" />
+  <link rel="stylesheet" href="css/styles.css?v=3" />
 </head>
 <body>
   <header class="app-header">
@@ -47,14 +47,10 @@
     </div>
     <div class="ctl-right">
       <span class="sync-badge" id="syncBadge"></span>
-      <span class="file-status" id="fileStatus"></span>
       <button class="btn sm" id="undoBtn" disabled>↩︎ 되돌리기</button>
       <button class="btn sm" id="syncBtn" title="원격에서 최신 불러오기 (원격 우선)">🔄 동기화</button>
-      <button class="btn sm" id="openFileBtn">📂 열기</button>
-      <button class="btn sm" id="saveFileBtn">💾 저장</button>
       <button class="btn sm" id="settingsBtn">⚙ 설정</button>
       <button class="btn sm btn-ghost" id="resetBtn">초기화</button>
-      <input type="file" id="importFile" accept="application/json" hidden />
     </div>
   </div>
 
@@ -90,7 +86,7 @@
   </div>
 
   <footer class="app-footer">
-    <p>변경사항은 이 브라우저에 자동 저장됩니다. <b>💾 저장</b>으로 JSON 파일에도 실시간 기록할 수 있어요.</p>
+    <p>변경사항은 이 브라우저에 자동 저장됩니다. <b>⚙ 설정</b>에서 GitHub 저장소에 연결하면 기기 간 자동 동기화돼요.</p>
     <p class="muted">한국 결혼 준비 체크리스트 템플릿 · 개인정보는 저장되지 않습니다</p>
   </footer>
 
@@ -98,6 +94,22 @@
   <div class="modal-backdrop" id="settingsModal">
     <div class="modal">
       <h3>설정</h3>
+
+      <!-- 1) 원격 저장소 (맨 위) -->
+      <section class="set-sec">
+        <h4>☁ 원격 저장소 (GitHub 동기화)</h4>
+        <label class="set-full">저장소 링크<input type="text" id="setRepo" placeholder="https://github.com/사용자/레포"></label>
+        <label class="set-full">JSON 경로<input type="text" id="setPath" placeholder="data/plan.json"></label>
+        <label class="set-full">액세스 토큰 (PAT)<input type="password" id="setToken" placeholder="github_pat_..." autocomplete="off"></label>
+        <p class="set-hint">토큰은 이 브라우저에만 저장됩니다 · <a id="patLink" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">토큰 만들기 ↗</a> · 상태: <span id="syncState">미연결</span></p>
+        <p class="set-note">💡 <b>연결하기</b>를 누르면 저장소의 공용 데이터를 <b>불러옵니다</b>. 이후엔 열면 자동 불러오기 · 고치면 자동 저장이며, <b>항상 원격(repo)이 우선</b>입니다.</p>
+        <div class="set-actions">
+          <button class="btn" id="setPull" title="원격 → 이 화면 (강제)">↓ 지금 불러오기</button>
+          <button class="btn btn-primary" id="setSave">연결하기</button>
+        </div>
+      </section>
+
+      <!-- 2) 예식 정보 (JSON에 함께 저장됨) -->
       <section class="set-sec">
         <h4>💒 예식 정보</h4>
         <div class="set-grid">
@@ -106,26 +118,29 @@
           <label>예식일<input type="datetime-local" id="setDate"></label>
           <label>예식장<input type="text" id="setVenue" placeholder="예식장"></label>
         </div>
+        <p class="set-hint">이 값들도 JSON 파일에 함께 저장·동기화됩니다.</p>
       </section>
+
+      <!-- 3) 파일 (상단바에서 이동) -->
       <section class="set-sec">
-        <h4>☁ GitHub 동기화 (JSON 저장)</h4>
-        <label class="set-full">저장소 링크<input type="text" id="setRepo" placeholder="https://github.com/사용자/레포"></label>
-        <label class="set-full">JSON 경로<input type="text" id="setPath" placeholder="data/plan.json"></label>
-        <label class="set-full">액세스 토큰 (PAT)<input type="password" id="setToken" placeholder="github_pat_..." autocomplete="off"></label>
-        <p class="set-hint">토큰은 이 브라우저에만 저장됩니다 · <a id="patLink" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">토큰 만들기 ↗</a> · 상태: <span id="syncState">미연결</span></p>
-        <p class="set-note">💡 <b>연결하기</b>를 누르면 저장소의 공용 데이터를 <b>불러옵니다</b>. 이후엔 열면 자동 불러오기 · 고치면 자동 저장이며, <b>항상 원격(repo)이 우선</b>입니다.</p>
+        <h4>📄 파일 (백업 / 기기 이전)</h4>
+        <div class="set-actions">
+          <button class="btn" id="openFileBtn">파일로부터 열기</button>
+          <button class="btn" id="saveFileBtn">파일로 설정 추출</button>
+        </div>
+        <p class="set-hint"><span class="file-status" id="fileStatus"></span></p>
+        <input type="file" id="importFile" accept="application/json" hidden />
       </section>
+
       <div class="modal-actions">
-        <button class="btn" id="setPull" title="원격 → 이 화면 (강제)">↓ 지금 불러오기</button>
         <span class="spacer"></span>
         <button class="btn" id="setCancel">닫기</button>
-        <button class="btn btn-primary" id="setSave">연결하기</button>
       </div>
     </div>
   </div>
 
-  <script src="js/data.js?v=2"></script>
-  <script src="js/github-sync.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/data.js?v=3"></script>
+  <script src="js/github-sync.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

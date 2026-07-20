@@ -543,8 +543,9 @@
     on("#settingsModal", "click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
 
     if (!FS_OK) {
-      $("#saveFileBtn").textContent = "💾 파일 다운로드";
-      $("#openFileBtn").textContent = "📂 파일 업로드";
+      const sf = $("#saveFileBtn"), of = $("#openFileBtn");
+      if (sf) sf.textContent = "파일로 설정 추출 (다운로드)";
+      if (of) of.textContent = "파일로부터 열기 (업로드)";
     }
   }
 
