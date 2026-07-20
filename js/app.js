@@ -533,14 +533,14 @@
       }
     });
 
-    // 동기화 버튼 (원격 최신 반영)
-    $("#syncBtn").addEventListener("click", syncNow);
-    // 설정 모달
-    $("#settingsBtn").addEventListener("click", openSettings);
-    $("#setCancel").addEventListener("click", closeSettings);
-    $("#setSave").addEventListener("click", saveSettings);
-    $("#setPull").addEventListener("click", () => remotePull(true));
-    $("#settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
+    // 동기화 / 설정 (요소 없으면 무시 → 캐시 불일치에도 다른 바인딩이 죽지 않음)
+    const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
+    on("#syncBtn", "click", syncNow);
+    on("#settingsBtn", "click", openSettings);
+    on("#setCancel", "click", closeSettings);
+    on("#setSave", "click", saveSettings);
+    on("#setPull", "click", () => remotePull(true));
+    on("#settingsModal", "click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
 
     if (!FS_OK) {
       $("#saveFileBtn").textContent = "💾 파일 다운로드";
