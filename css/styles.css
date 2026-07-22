@@ -89,7 +89,7 @@ h1 { font-family: "Gowun Batang", "Noto Sans KR", serif; margin: 0; }
 /* ---------------- 테이블 ---------------- */
 .table-panel { max-width: 1160px; margin: 14px auto 40px; padding: 0 20px; }
 .table-scroll { max-height: 68vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--surface); }
-table { width: 100%; min-width: 860px; border-collapse: separate; border-spacing: 0; background: var(--surface); }
+table { width: 100%; min-width: 840px; border-collapse: separate; border-spacing: 0; background: var(--surface); }
 th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; font-size: .88rem; vertical-align: middle; }
 th { position: sticky; top: 0; z-index: 3; background: #6c5b48; color: #fff; font-weight: 500; white-space: nowrap; cursor: pointer; user-select: none; box-shadow: inset 0 -1px 0 rgba(0,0,0,.15); }
 th:hover { background: #7c6b58; }
@@ -137,8 +137,8 @@ td input.in-num { min-width: 48px; }
 .app-footer { max-width: 1160px; margin: 0 auto 30px; padding: 0 20px; text-align: center; color: var(--ink-soft); font-size: .8rem; }
 .app-footer .muted { color: #b7aa9c; font-size: .74rem; }
 
-/* ---------------- 반응형: 좁은 화면(폰)에선 표를 카드로 ---------------- */
-@media (max-width: 680px) {
+/* ---------------- 반응형: 표가 안 맞는 폭에선 카드로(횡스크롤 방지) ---------------- */
+@media (max-width: 900px) {
   .countdown { text-align: left; }
 
   .table-scroll { max-height: none; overflow: visible; border: none; box-shadow: none; background: transparent; }
