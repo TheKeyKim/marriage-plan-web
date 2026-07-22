@@ -413,7 +413,7 @@
       <td data-label="선택지/업체"><input class="in-opt" data-i="${i}" data-f="opt" value="${attr(r.opt)}" placeholder="선택지 / 업체"></td>
       <td class="num" data-label="금액(만원)"><input type="number" min="0" class="in-num" data-i="${i}" data-f="price" value="${r.price ?? ""}" placeholder="미정"></td>
       <td class="num" data-label="계약금(만원)"><input type="number" min="0" class="in-num" data-i="${i}" data-f="deposit" value="${r.deposit ?? ""}" placeholder="0"></td>
-      <td class="c-status" data-label="상태"><select data-i="${i}" data-f="status">${STATUSES.map((s) => `<option ${r.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+      <td class="c-status" data-label="상태"><select class="${STATUS_CLS[r.status] || "s-idea"}" data-i="${i}" data-f="status">${STATUSES.map((s) => `<option ${r.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></td>
       <td class="c-memo" data-label="비고"><input class="in-memo" data-i="${i}" data-f="memo" value="${attr(r.memo)}" placeholder="메모…"></td>
       <td class="c-del" data-label=""><button class="del" data-i="${i}" title="행 삭제">삭제</button></td>`;
     return tr;

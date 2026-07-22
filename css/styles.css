@@ -144,31 +144,90 @@ td input.in-num { min-width: 48px; }
   .table-scroll { max-height: none; overflow: visible; border: none; box-shadow: none; background: transparent; }
   table { min-width: 0; }
   thead { display: none; }
-  tbody, tbody tr, tbody td { display: block; width: auto; }
-  tbody tr { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 12px; padding: 4px 14px 10px; }
-  tbody tr:nth-child(even) td { background: transparent; }
-  tbody tr.done { background: #f4faf2; border-color: var(--ok); }
-  tbody tr.done td { background: transparent !important; }
+  tbody { display: block; }
 
-  /* 카드 헤더: 그립(왼쪽) · 별표(오른쪽) */
-  tbody td.c-lead { display: flex; align-items: center; justify-content: space-between; width: auto; text-align: left; padding: 6px 2px 8px; margin-bottom: 6px; border-bottom: 1px dashed var(--line); }
-  tbody td.c-lead::before { content: none; }
-  .c-lead .grip { font-size: 1.2rem; }
-  .c-lead .star { font-size: 1.25rem; }
+  /* 카드: [완료·제목·상태] 헤더 → 구분/분류 → 업체 → 금액 → 비고 → [드래그·별표 / 삭제] */
+  tbody tr {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    grid-template-areas:
+      "done  title  status"
+      ".     tag    cat"
+      ".     opt    opt"
+      ".     price  deposit"
+      ".     memo   memo"
+      "util  util   util";
+    column-gap: 8px; row-gap: 7px; align-items: center; width: auto;
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--beige);
+    border-radius: 16px; box-shadow: var(--shadow); margin-bottom: 12px; padding: 13px 16px;
+  }
+  tbody tr:has(.toggle.req) { border-left-color: var(--req); }
+  tbody tr:has(.toggle.opt) { border-left-color: var(--opt); }
+  tbody tr.done { border-left-color: var(--ok) !important; background: #f8fbf6 !important; }
+  tbody tr:nth-child(even) td, tbody tr.done td { background: transparent !important; }
+  tbody tr:has(> td.empty) { display: block; border: none; box-shadow: none; background: transparent; padding: 20px 4px; }
 
-  /* 나머지 셀: 라벨 : 값 (2열) */
-  tbody td:not(.c-lead) { border: none !important; display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 8px; padding: 5px 0; width: auto; }
-  tbody td:not(.c-lead)::before { content: attr(data-label); color: var(--ink-soft); font-size: .78rem; }
-  tbody td.num { text-align: left; width: auto; }
-  tbody td input, tbody td select { width: 100%; border-color: var(--line); background: #fff; }
-  /* 항목명은 강조 */
-  tbody td[data-label="항목"] input { font-weight: 600; font-size: .95rem; }
-  /* 버튼·체크박스는 늘어나지 않게 (grid stretch 방지) */
-  tbody td.c-type .toggle, tbody td.c-done input, tbody td.c-del .del { justify-self: start; }
-  tbody td.c-done input { width: 18px; height: 18px; }
+  tbody td { display: block; width: auto; border: none !important; background: transparent !important; padding: 0; }
+  tbody td::before { content: none; }
+  tbody td input, tbody td select { width: 100%; border-color: transparent; }
+  tbody td input:hover, tbody td select:hover { border-color: var(--line); }
   .in-item, .in-opt, .in-memo, td input.in-num, .c-cat select { min-width: 0; }
-  .c-cat, .c-status, .c-done, .c-type { width: auto; }
-  .c-del::before { content: "" !important; }
+
+  /* 헤더: 완료 · 제목 · 상태 */
+  tbody td.c-done { grid-area: done; justify-self: start; }
+  tbody td.c-done input { width: 21px; height: 21px; margin: 0; }
+  tbody td[data-label="항목"] { grid-area: title; }
+  tbody td[data-label="항목"] input {
+    font-family: "Gowun Batang", serif; font-size: 1.12rem; font-weight: 700; color: var(--ink); padding: 0; line-height: 1.25;
+  }
+  tbody tr.done td[data-label="항목"] input { text-decoration: line-through; color: #9aa89a; }
+  tbody td.c-status { grid-area: status; justify-self: end; }
+  .c-status select { width: auto; border: none; font-weight: 700; font-size: .75rem; padding: 6px 22px 6px 12px; border-radius: 99px; }
+  .c-status select.s-idea { background: #eee9e2; color: #8a7f74; }
+  .c-status select.s-plan { background: #eaf0f5; color: #5b7f9e; }
+  .c-status select.s-book { background: #f6e3da; color: var(--req); }
+  .c-status select.s-done { background: #e6f2e4; color: var(--ok); }
+
+  /* 구분 pill + 분류 (제목 아래, 들여쓰기 정렬) */
+  tbody td.c-type { grid-area: tag; justify-self: start; }
+  tbody td.c-type .toggle { padding: 5px 13px; font-size: .74rem; }
+  tbody td.c-cat { grid-area: cat; justify-self: end; }
+  tbody td.c-cat select { width: auto; font-size: .73rem; color: var(--ink-soft); background: #f4efe6; border: none; border-radius: 99px; padding: 5px 20px 5px 11px; }
+
+  /* 업체 (헤더 아래 구분선 하나) */
+  tbody td[data-label="선택지/업체"] {
+    grid-area: opt; display: flex; align-items: baseline; gap: 8px;
+    padding-top: 9px; margin-top: 2px; border-top: 1px solid var(--line) !important;
+  }
+  tbody td[data-label="선택지/업체"]::before { content: "업체"; flex: none; font-size: .68rem; color: var(--ink-soft); }
+  tbody td[data-label="선택지/업체"] input { font-size: .88rem; color: var(--ink); }
+
+  /* 금액 · 계약금 (라벨 인라인) */
+  tbody td[data-label="금액(만원)"] { grid-area: price; display: flex; align-items: baseline; gap: 7px; }
+  tbody td[data-label="계약금(만원)"] { grid-area: deposit; display: flex; align-items: baseline; gap: 6px; justify-self: end; }
+  tbody td.num { text-align: left; width: auto; }
+  tbody td.num::before { flex: none; font-size: .68rem; color: var(--ink-soft); }
+  tbody td[data-label="금액(만원)"]::before { content: "금액"; }
+  tbody td[data-label="계약금(만원)"]::before { content: "계약금"; }
+  tbody td[data-label="금액(만원)"] input { font-size: 1.02rem; font-weight: 700; color: var(--gold); width: 5em; padding: 0; }
+  tbody td[data-label="계약금(만원)"] input { font-size: .84rem; color: var(--ink-soft); width: 4em; padding: 0; }
+  tbody tr.done td[data-label="금액(만원)"] input { color: var(--ok); }
+
+  /* 비고 */
+  tbody td.c-memo { grid-area: memo; }
+  tbody td.c-memo input { font-size: .82rem; font-style: italic; color: var(--ink-soft); }
+
+  /* 유틸리티: 드래그·별표 (좌) / 삭제 (우) — 하단, 구분선 위 */
+  tbody td.c-lead {
+    grid-area: util; align-self: stretch; justify-self: stretch; width: auto;
+    display: flex; align-items: center; gap: 2px; text-align: left;
+    padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--line) !important;
+  }
+  .c-lead .grip { font-size: 1.15rem; padding: 8px 10px 8px 0; margin: -8px 0; }
+  .c-lead .star { font-size: 1.3rem; padding: 8px; margin: -8px; }
+  tbody td.c-del { grid-area: util; justify-self: end; align-self: center; }
+  tbody td.c-del .del { padding: 8px 12px; font-size: .78rem; }
+  tbody td.c-del::before { content: none !important; }
 }
 
 /* ---------------- 설정 모달 + 동기화 배지 ---------------- */
