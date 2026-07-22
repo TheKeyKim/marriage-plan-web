@@ -393,8 +393,48 @@
     const tb = $("#tbody");
     tb.innerHTML = "";
     const list = sortedRows();
-    if (!list.length) { tb.innerHTML = `<tr><td colspan="11" class="empty">해당 분류에 항목이 없습니다.</td></tr>`; return; }
-    list.forEach(({ r, i }) => tb.appendChild(rowEl(r, i)));
+    if (!list.length) tb.innerHTML = `<tr><td colspan="11" class="empty">해당 분류에 항목이 없습니다.</td></tr>`;
+    else list.forEach(({ r, i }) => tb.appendChild(rowEl(r, i)));
+    renderCards();
+  }
+
+  /* ---------------------- 모바일 카드 (폰 상세뷰) ---------------------- */
+  function cardEl(r, i) {
+    const art = document.createElement("article");
+    art.className = "mc" + (r.done ? " done" : "");
+    art.dataset.i = i;
+    const sc = STATUS_CLS[r.status] || "s-idea";
+    art.innerHTML = `
+      <div class="mc-head">
+        <span class="grip" title="드래그로 순서 변경">⠿</span>
+        <span class="mc-check"><input type="checkbox" data-i="${i}" data-f="done" ${r.done ? "checked" : ""}></span>
+        <div class="mc-main">
+          <select class="mc-cat" data-i="${i}" data-f="category">${catOptions(r.category)}</select>
+          <input class="in-item mc-item" data-i="${i}" data-f="item" value="${attr(r.item)}" placeholder="항목명">
+        </div>
+        <button class="toggle ${r.type === "필수" ? "req" : "opt"}" data-i="${i}" title="필수↔선택 전환">${r.type}</button>
+        <button class="star ${r.star ? "on" : ""}" data-i="${i}" title="즐겨찾기">${r.star ? "★" : "☆"}</button>
+      </div>
+      <div class="mc-body">
+        <label class="mc-opt"><span class="lbl">업체</span><input class="in-opt" data-i="${i}" data-f="opt" value="${attr(r.opt)}" placeholder="선택지 / 업체"></label>
+        <div class="mc-money">
+          <label class="mc-box"><span class="lbl">금액</span><span class="v"><input type="number" min="0" class="in-num" data-i="${i}" data-f="price" value="${r.price ?? ""}" placeholder="미정"><small>만원</small></span></label>
+          <label class="mc-box dep"><span class="lbl">계약금</span><span class="v"><input type="number" min="0" class="in-num" data-i="${i}" data-f="deposit" value="${r.deposit ?? ""}" placeholder="0"><small>만원</small></span></label>
+        </div>
+        <div class="mc-foot">
+          <select class="mc-status ${sc}" data-i="${i}" data-f="status">${STATUSES.map((s) => `<option ${r.status === s ? "selected" : ""}>${s}</option>`).join("")}</select>
+          <button class="del" data-i="${i}" title="행 삭제">🗑</button>
+        </div>
+        <label class="mc-memo"><span class="lbl">비고</span><input class="in-memo" data-i="${i}" data-f="memo" value="${attr(r.memo)}" placeholder="메모 추가…"></label>
+      </div>`;
+    return art;
+  }
+  function renderCards() {
+    const cl = $("#cardList"); if (!cl) return;
+    cl.innerHTML = "";
+    const list = sortedRows();
+    if (!list.length) { cl.innerHTML = `<p class="empty">해당 분류에 항목이 없습니다.</p>`; return; }
+    list.forEach(({ r, i }) => cl.appendChild(cardEl(r, i)));
   }
   function catOptions(sel) {
     const known = cats.some((c) => c.id === sel);
@@ -485,68 +525,66 @@
       render(); save();
     });
 
-    const tb = $("#tbody");
-    tb.addEventListener("focusin", (e) => { if (e.target.dataset && e.target.dataset.f) pending = snapshot(); });
-    tb.addEventListener("input", (e) => {
-      const el = e.target;
-      if (!el.dataset.f) return;
-      if (el.type === "checkbox" || el.tagName === "SELECT") return;
-      if (pending != null) { pushHistory(pending); pending = null; }
-      const r = rows[el.dataset.i], f = el.dataset.f;
-      if (f === "price" || f === "deposit") {
-        r[f] = el.value.trim() === "" ? (f === "deposit" ? 0 : null) : Number(el.value);
-        const bc = el.closest("tr").querySelector(".bal");
-        if (bc) bc.textContent = won(balance(r));
-        localStorage.setItem(KEY, stateJson());
-        renderSummary();
-      } else {
-        r[f] = el.value;
-        localStorage.setItem(KEY, stateJson());
-      }
-      scheduleRemoteSave();
-    });
-    tb.addEventListener("change", (e) => {
-      const el = e.target;
-      if (!el.dataset.f) return;
-      const r = rows[el.dataset.i], f = el.dataset.f;
-      if (f === "done") { pushHistory(); setDone(r, el.checked); render(); }
-      else if (f === "status") {
-        if (pending != null) { pushHistory(pending); pending = null; } else pushHistory();
-        r.status = el.value; r.done = el.value === "완료"; render();
-      } else if (f === "category") {
-        if (pending != null) { pushHistory(pending); pending = null; } else pushHistory();
-        r.category = el.value; render();
-      }
-      save();
-    });
-    tb.addEventListener("click", (e) => {
-      const st = e.target.closest(".star");
-      if (st) { pushHistory(); const r = rows[st.dataset.i]; r.star = !r.star; render(); save(); return; }
-      const tg = e.target.closest(".toggle");
-      if (tg) { pushHistory(); const r = rows[tg.dataset.i]; r.type = r.type === "필수" ? "선택" : "필수"; render(); save(); return; }
-      const del = e.target.closest(".del");
-      if (del) { pushHistory(); rows.splice(Number(del.dataset.i), 1); render(); save(); return; }
-    });
-
-    // 드래그로 행 순서 변경 (SortableJS · 핸들 ⠿)
-    if (typeof Sortable !== "undefined") {
-      Sortable.create(tb, {
-        handle: ".grip", animation: 160, ghostClass: "drag-ghost", chosenClass: "drag-chosen", dragClass: "drag-dragging",
-        onEnd: (evt) => {
-          const { oldIndex, newIndex } = evt;
-          if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
-          pushHistory();
-          const vis = sortedRows().map((x) => x.r);
-          const [m] = vis.splice(oldIndex, 1);
-          vis.splice(newIndex, 0, m);
-          const visSet = new Set(vis);
-          let vi = 0;
-          rows = rows.map((r) => (visSet.has(r) ? vis[vi++] : r));
-          sort.key = null; $$("#head .arrow").forEach((a) => (a.textContent = ""));
-          render(); save();
-        },
+    // 편집 핸들러 + 드래그 정렬: 표(#tbody)와 모바일 카드(#cardList) 양쪽에 위임
+    [$("#tbody"), $("#cardList")].filter(Boolean).forEach((root) => {
+      root.addEventListener("focusin", (e) => { if (e.target.dataset && e.target.dataset.f) pending = snapshot(); });
+      root.addEventListener("input", (e) => {
+        const el = e.target;
+        if (!el.dataset.f) return;
+        if (el.type === "checkbox" || el.tagName === "SELECT") return;
+        if (pending != null) { pushHistory(pending); pending = null; }
+        const r = rows[el.dataset.i], f = el.dataset.f;
+        if (f === "price" || f === "deposit") {
+          r[f] = el.value.trim() === "" ? (f === "deposit" ? 0 : null) : Number(el.value);
+          localStorage.setItem(KEY, stateJson());
+          renderSummary();
+        } else {
+          r[f] = el.value;
+          localStorage.setItem(KEY, stateJson());
+        }
+        scheduleRemoteSave();
       });
-    }
+      root.addEventListener("change", (e) => {
+        const el = e.target;
+        if (!el.dataset.f) return;
+        const r = rows[el.dataset.i], f = el.dataset.f;
+        if (f === "done") { pushHistory(); setDone(r, el.checked); render(); }
+        else if (f === "status") {
+          if (pending != null) { pushHistory(pending); pending = null; } else pushHistory();
+          r.status = el.value; r.done = el.value === "완료"; render();
+        } else if (f === "category") {
+          if (pending != null) { pushHistory(pending); pending = null; } else pushHistory();
+          r.category = el.value; render();
+        }
+        save();
+      });
+      root.addEventListener("click", (e) => {
+        const st = e.target.closest(".star");
+        if (st) { pushHistory(); const r = rows[st.dataset.i]; r.star = !r.star; render(); save(); return; }
+        const tg = e.target.closest(".toggle");
+        if (tg) { pushHistory(); const r = rows[tg.dataset.i]; r.type = r.type === "필수" ? "선택" : "필수"; render(); save(); return; }
+        const del = e.target.closest(".del");
+        if (del) { pushHistory(); rows.splice(Number(del.dataset.i), 1); render(); save(); return; }
+      });
+      if (typeof Sortable !== "undefined") {
+        Sortable.create(root, {
+          handle: ".grip", animation: 160, ghostClass: "drag-ghost", chosenClass: "drag-chosen", dragClass: "drag-dragging",
+          onEnd: (evt) => {
+            const { oldIndex, newIndex } = evt;
+            if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
+            pushHistory();
+            const vis = sortedRows().map((x) => x.r);
+            const [m] = vis.splice(oldIndex, 1);
+            vis.splice(newIndex, 0, m);
+            const visSet = new Set(vis);
+            let vi = 0;
+            rows = rows.map((r) => (visSet.has(r) ? vis[vi++] : r));
+            sort.key = null; $$("#head .arrow").forEach((a) => (a.textContent = ""));
+            render(); save();
+          },
+        });
+      }
+    });
 
     // 헤더 정렬
     $("#head").addEventListener("click", (e) => {

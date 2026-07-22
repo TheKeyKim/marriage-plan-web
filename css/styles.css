@@ -137,98 +137,53 @@ td input.in-num { min-width: 48px; }
 .app-footer { max-width: 1160px; margin: 0 auto 30px; padding: 0 20px; text-align: center; color: var(--ink-soft); font-size: .8rem; }
 .app-footer .muted { color: #b7aa9c; font-size: .74rem; }
 
-/* ---------------- 반응형: 표가 안 맞는 폭에선 카드로(횡스크롤 방지) ---------------- */
+/* ---------------- 반응형: 폰에선 표 숨기고 모바일 카드 리스트 ---------------- */
+.card-list { display: none; }
 @media (max-width: 900px) {
   .countdown { text-align: left; }
-
-  .table-scroll { max-height: none; overflow: visible; border: none; box-shadow: none; background: transparent; }
-  table { min-width: 0; }
-  thead { display: none; }
-  tbody { display: block; }
-
-  /* 카드: [완료·제목·상태] 헤더 → 구분/분류 → 업체 → 금액 → 비고 → [드래그·별표 / 삭제] */
-  tbody tr {
-    display: grid;
-    grid-template-columns: 24px 1fr auto;
-    grid-template-areas:
-      "done  title  status"
-      ".     tag    cat"
-      ".     opt    opt"
-      ".     price  deposit"
-      ".     memo   memo"
-      "util  util   util";
-    column-gap: 8px; row-gap: 7px; align-items: center; width: auto;
-    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--beige);
-    border-radius: 16px; box-shadow: var(--shadow); margin-bottom: 12px; padding: 13px 16px;
-  }
-  tbody tr:has(.toggle.req) { border-left-color: var(--req); }
-  tbody tr:has(.toggle.opt) { border-left-color: var(--opt); }
-  tbody tr.done { border-left-color: var(--ok) !important; background: #f8fbf6 !important; }
-  tbody tr:nth-child(even) td, tbody tr.done td { background: transparent !important; }
-  tbody tr:has(> td.empty) { display: block; border: none; box-shadow: none; background: transparent; padding: 20px 4px; }
-
-  tbody td { display: block; width: auto; border: none !important; background: transparent !important; padding: 0; }
-  tbody td::before { content: none; }
-  tbody td input, tbody td select { width: 100%; border-color: transparent; }
-  tbody td input:hover, tbody td select:hover { border-color: var(--line); }
-  .in-item, .in-opt, .in-memo, td input.in-num, .c-cat select { min-width: 0; }
-
-  /* 헤더: 완료 · 제목 · 상태 */
-  tbody td.c-done { grid-area: done; justify-self: start; }
-  tbody td.c-done input { width: 21px; height: 21px; margin: 0; }
-  tbody td[data-label="항목"] { grid-area: title; }
-  tbody td[data-label="항목"] input {
-    font-family: "Gowun Batang", serif; font-size: 1.12rem; font-weight: 700; color: var(--ink); padding: 0; line-height: 1.25;
-  }
-  tbody tr.done td[data-label="항목"] input { text-decoration: line-through; color: #9aa89a; }
-  tbody td.c-status { grid-area: status; justify-self: end; }
-  .c-status select { width: auto; border: none; font-weight: 700; font-size: .75rem; padding: 6px 22px 6px 12px; border-radius: 99px; }
-  .c-status select.s-idea { background: #eee9e2; color: #8a7f74; }
-  .c-status select.s-plan { background: #eaf0f5; color: #5b7f9e; }
-  .c-status select.s-book { background: #f6e3da; color: var(--req); }
-  .c-status select.s-done { background: #e6f2e4; color: var(--ok); }
-
-  /* 구분 pill + 분류 (제목 아래, 들여쓰기 정렬) */
-  tbody td.c-type { grid-area: tag; justify-self: start; }
-  tbody td.c-type .toggle { padding: 5px 13px; font-size: .74rem; }
-  tbody td.c-cat { grid-area: cat; justify-self: end; }
-  tbody td.c-cat select { width: auto; font-size: .73rem; color: var(--ink-soft); background: #f4efe6; border: none; border-radius: 99px; padding: 5px 20px 5px 11px; }
-
-  /* 업체 (헤더 아래 구분선 하나) */
-  tbody td[data-label="선택지/업체"] {
-    grid-area: opt; display: flex; align-items: baseline; gap: 8px;
-    padding-top: 9px; margin-top: 2px; border-top: 1px solid var(--line) !important;
-  }
-  tbody td[data-label="선택지/업체"]::before { content: "업체"; flex: none; font-size: .68rem; color: var(--ink-soft); }
-  tbody td[data-label="선택지/업체"] input { font-size: .88rem; color: var(--ink); }
-
-  /* 금액 · 계약금 (라벨 인라인) */
-  tbody td[data-label="금액(만원)"] { grid-area: price; display: flex; align-items: baseline; gap: 7px; }
-  tbody td[data-label="계약금(만원)"] { grid-area: deposit; display: flex; align-items: baseline; gap: 6px; justify-self: end; }
-  tbody td.num { text-align: left; width: auto; }
-  tbody td.num::before { flex: none; font-size: .68rem; color: var(--ink-soft); }
-  tbody td[data-label="금액(만원)"]::before { content: "금액"; }
-  tbody td[data-label="계약금(만원)"]::before { content: "계약금"; }
-  tbody td[data-label="금액(만원)"] input { font-size: 1.02rem; font-weight: 700; color: var(--gold); width: 5em; padding: 0; }
-  tbody td[data-label="계약금(만원)"] input { font-size: .84rem; color: var(--ink-soft); width: 4em; padding: 0; }
-  tbody tr.done td[data-label="금액(만원)"] input { color: var(--ok); }
-
-  /* 비고 */
-  tbody td.c-memo { grid-area: memo; }
-  tbody td.c-memo input { font-size: .82rem; font-style: italic; color: var(--ink-soft); }
-
-  /* 유틸리티: 드래그·별표 (좌) / 삭제 (우) — 하단, 구분선 위 */
-  tbody td.c-lead {
-    grid-area: util; align-self: stretch; justify-self: stretch; width: auto;
-    display: flex; align-items: center; gap: 2px; text-align: left;
-    padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--line) !important;
-  }
-  .c-lead .grip { font-size: 1.15rem; padding: 8px 10px 8px 0; margin: -8px 0; }
-  .c-lead .star { font-size: 1.3rem; padding: 8px; margin: -8px; }
-  tbody td.c-del { grid-area: util; justify-self: end; align-self: center; }
-  tbody td.c-del .del { padding: 8px 12px; font-size: .78rem; }
-  tbody td.c-del::before { content: none !important; }
+  .table-scroll { display: none; }
+  .card-list { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
 }
+
+/* 모바일 카드 (상세뷰의 폰 렌더) — iOS풍 카드 */
+.mc { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; transition: opacity .2s; }
+.mc.done { opacity: .6; }
+.mc-head { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-bottom: 1px solid var(--line); }
+.mc .grip { color: #ccc3b6; font-size: 18px; cursor: grab; line-height: 1; flex: 0 0 auto; padding: 6px 3px; margin: -6px -2px; touch-action: none; }
+.mc-check { flex: 0 0 auto; display: grid; }
+.mc-check input { appearance: none; -webkit-appearance: none; width: 24px; height: 24px; border: 2px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; display: grid; place-items: center; margin: 0; transition: .15s; }
+.mc-check input::after { content: "✓"; color: transparent; font-size: 14px; font-weight: 800; }
+.mc.done .mc-check input { background: var(--ok); border-color: var(--ok); }
+.mc.done .mc-check input::after { color: #fff; }
+.mc-main { flex: 1; min-width: 0; }
+.mc-cat { border: none !important; background: none; color: var(--rose); font-size: 11px; font-weight: 700; letter-spacing: .2px; padding: 0; width: auto; max-width: 100%; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.mc-item { border: none !important; background: transparent; font-size: 16.5px; font-weight: 800; letter-spacing: -.3px; color: var(--ink); padding: 1px 0 0; width: 100%; font-family: "Gowun Batang", serif; }
+.mc.done .mc-item { text-decoration: line-through; color: var(--ink-soft); }
+.mc .toggle { flex: 0 0 auto; padding: 5px 12px; font-size: 12px; }
+.mc .star { flex: 0 0 auto; font-size: 20px; padding: 4px; }
+.mc-body { padding: 12px 13px 13px; }
+.mc-opt { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.mc-opt .lbl { color: var(--ink-soft); font-size: 12px; flex: 0 0 auto; }
+.mc-opt .in-opt { border: none !important; background: transparent; font-size: 14px; font-weight: 600; color: var(--ink); padding: 0; width: 100%; }
+.mc-money { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.mc-box { display: block; background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 8px 11px; }
+.mc-box .lbl { display: block; font-size: 11px; color: var(--ink-soft); margin-bottom: 1px; }
+.mc-box .v { display: flex; align-items: baseline; }
+.mc-box .in-num { border: none !important; background: transparent; font-size: 17px; font-weight: 800; color: var(--ink); padding: 0; min-width: 0; width: 100%; }
+.mc-box.dep .in-num { color: #3b82f6; }
+.mc-box small { font-size: 11px; color: var(--ink-soft); font-weight: 600; margin-left: 2px; flex: 0 0 auto; }
+.mc-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mc-status { border: none; font-weight: 700; font-size: 12.5px; padding: 6px 26px 6px 12px; border-radius: 999px; cursor: pointer; appearance: none; -webkit-appearance: none; background-repeat: no-repeat; background-position: right 9px center; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-size: 5px 5px, 5px 5px; }
+.mc-status.s-idea { background-color: #fff4e5; color: #c2760a; }
+.mc-status.s-plan { background-color: #e8f0fe; color: #2563eb; }
+.mc-status.s-book { background-color: #ede9fe; color: #7c3aed; }
+.mc-status.s-done { background-color: #e7f6ec; color: #15803d; }
+.mc-foot .del { width: 34px; height: 34px; border: 1px solid var(--line); background: #fff; border-radius: 10px; color: #d66; font-size: 15px; padding: 0; cursor: pointer; }
+.mc-foot .del:hover { background: var(--rose-soft); }
+.mc-memo { display: flex; gap: 6px; align-items: center; margin-top: 12px; background: #faf8f3; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; }
+.mc-memo .lbl { color: var(--ink-soft); font-size: 12px; flex: 0 0 auto; }
+.mc-memo .in-memo { border: none !important; background: transparent; font-size: 12.5px; color: var(--ink); padding: 0; width: 100%; }
+.card-list .empty { text-align: center; color: var(--ink-soft); padding: 30px; }
 
 /* ---------------- 설정 모달 + 동기화 배지 ---------------- */
 .sync-badge { font-size: .76rem; color: var(--ok); white-space: nowrap; }
