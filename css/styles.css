@@ -181,3 +181,16 @@ td input.in-num { min-width: 48px; }
 .modal-actions .spacer { flex: 1; }
 .set-note { font-size: .78rem; color: var(--ink); background: #fbf6ee; border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; line-height: 1.55; }
 .set-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+
+/* ---------------- 드래그 핸들 + 별표 ---------------- */
+.c-lead { white-space: nowrap; width: 48px; text-align: center; padding-left: 6px; }
+.grip { cursor: grab; color: #c3b8ab; font-size: 1rem; padding: 0 1px; user-select: none; }
+.grip:active { cursor: grabbing; }
+.star, .ov-star { border: none; background: none; cursor: pointer; color: #d3c6b3; font-size: 1.05rem; padding: 0 2px; line-height: 1; }
+.star.on, .ov-star.on { color: #e6b422; }
+.ov-star { margin-left: 6px; }
+/* Sortable 드래그 피드백 */
+tbody tr { transition: background .12s; }
+.drag-ghost { opacity: .35; }
+.drag-chosen { background: #fff7e8 !important; }
+.drag-dragging { box-shadow: 0 8px 20px rgba(120,100,70,.28); }

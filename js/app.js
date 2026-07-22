@@ -278,6 +278,7 @@
       `<button class="chip ${cls} ${catFilter === id ? "active" : ""}" data-cat="${id}">${icon ? icon + " " : ""}${attr(label)}</button>`;
     wrap.innerHTML =
       chip("all", "전체", "🗂️") +
+      chip("starred", "즐겨찾기", "⭐") +
       cats.map((c) => chip(c.id, c.name, c.icon)).join("") +
       `<button class="chip add-cat" data-addcat="1" title="분류 추가">＋ 분류</button>`;
   }
@@ -322,7 +323,7 @@
     renderSummary();
   }
 
-  const inFilter = (r) => catFilter === "all" || r.category === catFilter;
+  const inFilter = (r) => catFilter === "starred" ? !!r.star : (catFilter === "all" || r.category === catFilter);
   // 개요/필터에 쓸 분류 목록 (미분류 항목이 있으면 가상 분류 추가)
   function visibleCats() {
     const list = cats.slice();
@@ -335,10 +336,12 @@
   function renderOverview() {
     const wrap = $("#overview");
     wrap.innerHTML = "";
-    const list = visibleCats().filter((c) => catFilter === "all" || c.id === catFilter);
+    const starred = catFilter === "starred";
+    const list = visibleCats().filter((c) => catFilter === "all" || starred || c.id === catFilter);
     list.forEach((c) => {
-      const items = rows.map((r, i) => ({ r, i })).filter((x) =>
+      let items = rows.map((r, i) => ({ r, i })).filter((x) =>
         x.r.category === c.id || (c.id === "_none" && !cats.some((cc) => cc.id === x.r.category)));
+      if (starred) items = items.filter((x) => x.r.star);
       if (!items.length) return;
       const done = items.filter((x) => x.r.done).length;
       const pct = Math.round((done / items.length) * 100);
@@ -366,6 +369,7 @@
       <span class="ov-name">${attr(r.item)}</span>
       <span class="ov-badge ${cls}">${r.status}</span>
       <span class="ov-amt">${amt}</span>
+      <button class="ov-star ${r.star ? "on" : ""}" data-i="${i}" title="즐겨찾기">${r.star ? "★" : "☆"}</button>
     </li>`;
   }
 
@@ -389,7 +393,7 @@
     const tb = $("#tbody");
     tb.innerHTML = "";
     const list = sortedRows();
-    if (!list.length) { tb.innerHTML = `<tr><td colspan="10" class="empty">해당 분류에 항목이 없습니다.</td></tr>`; return; }
+    if (!list.length) { tb.innerHTML = `<tr><td colspan="11" class="empty">해당 분류에 항목이 없습니다.</td></tr>`; return; }
     list.forEach(({ r, i }) => tb.appendChild(rowEl(r, i)));
   }
   function catOptions(sel) {
@@ -401,6 +405,7 @@
     const tr = document.createElement("tr");
     if (r.done) tr.className = "done";
     tr.innerHTML = `
+      <td class="c-lead"><span class="grip" title="드래그로 순서 변경">⠿</span><button class="star ${r.star ? "on" : ""}" data-i="${i}" title="즐겨찾기">${r.star ? "★" : "☆"}</button></td>
       <td class="c-done" data-label="완료"><input type="checkbox" data-i="${i}" data-f="done" ${r.done ? "checked" : ""}></td>
       <td class="c-type" data-label="구분"><button class="toggle ${r.type === "필수" ? "req" : "opt"}" data-i="${i}" title="필수↔선택 전환">${r.type}</button></td>
       <td class="c-cat" data-label="분류"><select data-i="${i}" data-f="category">${catOptions(r.category)}</select></td>
@@ -418,8 +423,9 @@
   // 행 추가 (분류 지정 시 그 분류로, 표 화면으로 전환 후 항목명 포커스)
   function addRow(cat) {
     pushHistory();
-    const c = cat || (catFilter !== "all" && catFilter !== "_none" ? catFilter : (cats[0] && cats[0].id) || "admin");
-    rows.push({ category: c, done: false, type: "선택", item: "", opt: "", price: null, deposit: 0, status: "검토중", memo: "" });
+    const active = catFilter !== "all" && catFilter !== "_none" && catFilter !== "starred" ? catFilter : null;
+    const c = cat || active || (cats[0] && cats[0].id) || "admin";
+    rows.push({ category: c, done: false, type: "선택", item: "", opt: "", price: null, deposit: 0, status: "검토중", memo: "", star: catFilter === "starred" });
     if (cat && cat !== catFilter) catFilter = cat;
     view = "table";
     sort.key = null;
@@ -450,18 +456,18 @@
       const b = e.target.closest(".chip"); if (!b) return;
       if (b.dataset.addcat) { addCategory(); return; }
       const id = b.dataset.cat;
-      if (e.altKey && id !== "all" && id !== "_none") { deleteCategory(id); return; }
+      if (e.altKey && id !== "all" && id !== "_none" && id !== "starred") { deleteCategory(id); return; }
       catFilter = id; render();
     });
     $("#catChips").addEventListener("dblclick", (e) => {
       const b = e.target.closest(".chip"); if (!b) return;
       const id = b.dataset.cat;
-      if (id && id !== "all" && id !== "_none" && !b.dataset.addcat) renameCategory(id);
+      if (id && id !== "all" && id !== "_none" && id !== "starred" && !b.dataset.addcat) renameCategory(id);
     });
     $("#catChips").addEventListener("contextmenu", (e) => {
       const b = e.target.closest(".chip"); if (!b) return;
       const id = b.dataset.cat;
-      if (id && id !== "all" && id !== "_none" && !b.dataset.addcat) { e.preventDefault(); deleteCategory(id); }
+      if (id && id !== "all" && id !== "_none" && id !== "starred" && !b.dataset.addcat) { e.preventDefault(); deleteCategory(id); }
     });
     // 행 추가 (표 위/아래 버튼, 개요 분류별 "+항목") — data-add 위임
     document.addEventListener("click", (e) => {
@@ -471,6 +477,8 @@
     // 개요: 항목 클릭 → 완료 토글
     $("#overview").addEventListener("click", (e) => {
       if (e.target.closest("[data-add]")) return;
+      const ovs = e.target.closest(".ov-star");
+      if (ovs) { pushHistory(); const r = rows[ovs.dataset.i]; r.star = !r.star; render(); save(); return; }
       const li = e.target.closest(".ov-item"); if (!li) return;
       pushHistory();
       setDone(rows[li.dataset.i], !rows[li.dataset.i].done);
@@ -512,11 +520,33 @@
       save();
     });
     tb.addEventListener("click", (e) => {
+      const st = e.target.closest(".star");
+      if (st) { pushHistory(); const r = rows[st.dataset.i]; r.star = !r.star; render(); save(); return; }
       const tg = e.target.closest(".toggle");
       if (tg) { pushHistory(); const r = rows[tg.dataset.i]; r.type = r.type === "필수" ? "선택" : "필수"; render(); save(); return; }
       const del = e.target.closest(".del");
       if (del) { pushHistory(); rows.splice(Number(del.dataset.i), 1); render(); save(); return; }
     });
+
+    // 드래그로 행 순서 변경 (SortableJS · 핸들 ⠿)
+    if (typeof Sortable !== "undefined") {
+      Sortable.create(tb, {
+        handle: ".grip", animation: 160, ghostClass: "drag-ghost", chosenClass: "drag-chosen", dragClass: "drag-dragging",
+        onEnd: (evt) => {
+          const { oldIndex, newIndex } = evt;
+          if (oldIndex == null || newIndex == null || oldIndex === newIndex) return;
+          pushHistory();
+          const vis = sortedRows().map((x) => x.r);
+          const [m] = vis.splice(oldIndex, 1);
+          vis.splice(newIndex, 0, m);
+          const visSet = new Set(vis);
+          let vi = 0;
+          rows = rows.map((r) => (visSet.has(r) ? vis[vi++] : r));
+          sort.key = null; $$("#head .arrow").forEach((a) => (a.textContent = ""));
+          render(); save();
+        },
+      });
+    }
 
     // 헤더 정렬
     $("#head").addEventListener("click", (e) => {
